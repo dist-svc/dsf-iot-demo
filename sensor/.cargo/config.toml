@@ -1,0 +1,19 @@
+[target.thumbv7em-none-eabihf]
+
+rustflags = [
+   "-C", "linker=arm-none-eabi-gcc",
+   "-C", "link-arg=-L/usr/lib/arm-none-eabi/lib/thumb/v7e-m/fpv4-sp/hard/",
+   "-C", "link-arg=-Wl,-Tlink.x",
+   "-C", "link-arg=-Tdefmt.x",
+   "-C", "link-arg=-nostartfiles",
+   "-C", "link-arg=-mcpu=cortex-m4",
+   "-C", "link-arg=-mfloat-abi=hard",
+   "-C", "link-arg=-lc",
+   "-C", "link-arg=-lnosys",
+]
+
+runner = "probe-run --chip STM32F429ZITx"
+
+[build]
+target = "thumbv7em-none-eabihf"
+
