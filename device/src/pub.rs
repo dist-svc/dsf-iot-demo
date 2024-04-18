@@ -2,6 +2,7 @@
 #![no_std]
 #![no_main]
 
+#![feature(lazy_cell)]
 #![feature(alloc_error_handler)]
 
 use core::alloc::Layout;
@@ -44,7 +45,6 @@ use hal::{serial::Serial, spi::Spi, i2c::I2c};
 use hal::timer::{Timer, Event};
 
 use rand_core::{RngCore, SeedableRng, CryptoRng};
-use rand_facade::GlobalRng;
 use rand_chacha::ChaChaRng;
 
 use bme280::i2c::BME280;
@@ -55,8 +55,10 @@ use radio_sx128x::{Config as Sx128xConfig};
 use lpwan::prelude::*;
 use lpwan::mac_802154::{SyncState, AssocState};
 
-use dsf_core::prelude::*;
-use dsf_core::service::{ServiceBuilder, Publisher};
+use dsf_core::{
+    prelude::*,
+    service::{ServiceBuilder, Publisher},
+};
 
 use dsf_iot::prelude::*;
 use dsf_engine::store::{Store};
@@ -70,7 +72,7 @@ mod timer;
 use timer::SystickDelay;
 
 mod common;
-use common::{DEVICE_KEYS, StaticKeyStore, RadioComms, HeaplessStore};
+use common::{device_keys, StaticKeyStore, RadioComms, HeaplessStore};
 
 //#[link(name = "c", kind = "static")]
 //extern {}
@@ -154,6 +156,10 @@ fn main() -> ! {
     syst.enable_counter();
     syst.enable_interrupt();
 
+    // Create delay object
+    //let delay = SystickDelay{};
+    let mut delay = syst.delay(&clocks);
+
     // Fetch unique chip ID for address use
     let chip_id = hal::signature::Uid::get();
     let chip_id = (chip_id.waf_num() as u64) << 32 | (chip_id.y() as u64) << 16 | (chip_id.x() as u64);
@@ -161,6 +167,8 @@ fn main() -> ! {
     info!("hello world");
 
     info!("Starting device with ID: {}", chip_id);
+
+    let device_keys = device_keys();
 
     info!("Configuring RNG");
 
@@ -192,7 +200,7 @@ fn main() -> ! {
         gpioa.pa5.into_alternate().speed(Speed::VeryHigh),
     )};
     let spi = Spi::new(device.SPI1, (spi_sck, spi_miso, spi_mosi), MODE_0, 1.MHz().into(), &clocks);
-
+    let rf_spi = embedded_hal_bus::spi::ExclusiveDevice::new_no_delay(spi, rf_cs);
 
     // Setup I2C
     let (i2c_scl, i2c_sda) = {(
@@ -200,20 +208,19 @@ fn main() -> ! {
         gpiob.pb11.into_alternate().speed(Speed::VeryHigh).internal_pull_up(true).set_open_drain(),
     )};
 
-    let i2c = I2c::new(device.I2C2, (i2c_scl, i2c_sda), 10.KHz(), &clocks);
+    let i2c = I2c::new(device.I2C2, (i2c_scl, i2c_sda), 10.kHz(), &clocks);
+    //let i2c_bus = embedded_hal_bus::i2c::ExclusiveDevice::new_no_delay(i2c);
 
     // Setup a timer object
     //let mut timer = Timer::tim1(device.TIM1, 1.khz(), clocks).unwrap();
 
-    // Create delay object
-    //let delay = SystickDelay{};
-    let mut delay = core.SYST.delay(&clocks);
+
 
     info!("Initialising radio");
 
     // Initialise radio
     let rf_config = common::rf_config();
-    let mut radio = match Sx128x::spi(spi, rf_cs, rf_busy, rf_ready, rf_rst, delay, &rf_config) {
+    let mut radio = match Sx128x::spi(rf_spi, rf_busy, rf_ready, rf_rst, delay, &rf_config) {
         Ok(v) => v,
         Err(e) => {
             panic!("Error initialising radio: {:?}", e);
@@ -229,8 +236,8 @@ fn main() -> ! {
     info!("Initialising bme280");
 
     // Initialise sensor
-    let mut bme280 = BME280::new(i2c, 119, SystickDelay{});
-    if let Err(e) = bme280.init() {
+    let mut bme280 = BME280::new(i2c, 119);
+    if let Err(e) = bme280.init(&mut SystickDelay{}) {
         panic!("Error initialising BME280: {:?}", e);
     }
 
@@ -256,54 +263,54 @@ fn main() -> ! {
     let sixlo_cfg = SixLoConfig{
         ..Default::default()
     };
-    let mut sixlo = SixLo::<_, _, 127>::new(mac, MacAddress::Extended(PanId(1), address), sixlo_cfg);
+    let mut sixlo = SixLo::<_, 127>::new(mac, MacAddress::Extended(PanId(1), address), sixlo_cfg);
 
     info!("Building service");
 
     // Create endpoints
-    let info = IotInfo::new(&[
+    let info = IotInfo::<4>::new(&[
         EpDescriptor::new(EpKind::Temperature, EpFlags::R),
         EpDescriptor::new(EpKind::Pressure, EpFlags::R),
         EpDescriptor::new(EpKind::Humidity, EpFlags::R),
     ]).unwrap();
 
-    let comms = RadioComms::new();
-    let store = HeaplessStore::new();
+    #[cfg(wip)]
+    {
 
-    let keys = DEVICE_KEYS.iter().find(|(c, _k)| *c == chip_id);
-    if let Some(k) = &keys {
-        store.set_ident(&k.1);
+        let comms = RadioComms::new();
+        let store = HeaplessStore::new();
+
+        let keys = device.iter().find(|(c, _k)| *c == chip_id);
+        if let Some(k) = &keys {
+            store.set_ident(&k.1);
+        }
+
+        let mut engine = match IotEngine::new(info, &[], comms, store) {
+            Ok(e) => e,
+            Err(e) => {
+                error!("Failed to initialise engine: {:?}", e);
+                loop {}
+            }
+        };
     }
 
-    let mut engine = match IotEngine::new(info, &[], comms, store) {
-        Ok(e) => e,
-        Err(e) => {
-            error!("Failed to initialise engine: {:?}", e);
-            loop {}
-        }
-    };
-
-    loop {}
-
-    #[cfg(nope)]
     {
     
     let mut body = [0u8; 1024];
-    let n = IotService::encode_body(&endpoints, &mut body).unwrap();
 
     // TODO: set kind to IotService
     let mut sb = ServiceBuilder::default();
     
-    let keys = DEVICE_KEYS.iter().find(|(c, _k)| *c == chip_id);
+    let keys = device_keys.iter().find(|(c, _k)| *c == chip_id);
     if let Some(k) = keys {
         sb = sb.private_key(k.1.pri_key.clone().unwrap());
     }
     
-    let mut s = sb.body(Body::Cleartext((&body[..n]).to_vec())).build().unwrap();
+    let mut s = sb.body(info).build().unwrap();
     info!("Service ID: {}", s.id().to_string());
  
     let mut buff = [0u8; 1024];
-    let (n, _p) = s.publish_primary(&mut buff).unwrap();
+    let (n, _p) = s.publish_primary(PrimaryOptions::default(), &mut buff).unwrap();
 
     let primary = &buff[..n];
 
@@ -331,8 +338,8 @@ fn main() -> ! {
 
             debug!("Received {} byte packet", n);
 
-            let (base, _n) = match Base::parse(&rf_buff[..n], &keystore) {
-                Ok(v) => (v),
+            let base = match Container::parse(&mut rf_buff[..n], &keystore) {
+                Ok(v) => v,
                 Err(e) => {
                     error!("DSF parsing error: {:?}", e);
                     continue;
@@ -353,7 +360,7 @@ fn main() -> ! {
 
             match &m {
                 // Handle discovery requests
-                NetMessage::Request(req) if req.data == NetRequestKind::Hello => {
+                NetMessage::Request(req) if req.data == NetRequestBody::Hello => {
                     // TODO: only respond to _unknown_ gateways (don't need to send this all the time)
 
                     info!("Received hello from {} ({:?}), sending service page", id, addr);
@@ -380,7 +387,7 @@ fn main() -> ! {
 
         }
         
-        if let (SyncState::Synced(gw), AssocState::Associated(pan)) = sixlo.mac().state() {
+        if let Ok(MacState::Synced(gw)) = sixlo.mac().state() {
             match &net_state {
                 NetState::None => {
                     info!("Registering service with gw: {:?}", gw);
@@ -398,21 +405,18 @@ fn main() -> ! {
             if now > (last_reading + 10_000) {
                 debug!("Measurement start");
 
-                let m = bme280.measure().unwrap();
+                let m = bme280.measure(&mut SystickDelay{}).unwrap();
 
                 info!("Measurement temp: {} press: {} humid: {}", m.temperature as i32, m.pressure as i32, m.humidity as i32);
 
-                let endpoint_data = [
-                    EndpointData::new(roundf(m.temperature).into(), &[]),
-                    EndpointData::new(roundf(m.pressure / 1000.0).into(), &[]),
-                    EndpointData::new(roundf(m.humidity).into(), &[]),
-                ];
-
-                let mut data_buff = [0u8; 128];
-                let n = IotData::encode_data(&endpoint_data, &mut data_buff).unwrap();
+                let endpoint_data = IotData::<4>::new(&[
+                    EpData::new(roundf(m.temperature).into()),
+                    EpData::new(roundf(m.pressure / 1000.0).into()),
+                    EpData::new(roundf(m.humidity).into()),
+                ]).unwrap();
 
                 let page_opts = DataOptions{
-                    body: Body::Cleartext((&data_buff[..n]).to_vec()),
+                    body: Some(endpoint_data),
                     ..Default::default()
                 };
 
@@ -435,12 +439,12 @@ fn main() -> ! {
         }
 
         if (SystickDelay{}.ticks_ms() / 500) % 2 == 0 {
-            led0.try_set_high().unwrap();
+            led0.set_high();
         } else {
-            led0.try_set_low().unwrap();
+            led0.set_low();
         }
 
-        SystickDelay{}.try_delay_ms(1u32).unwrap();
+        SystickDelay{}.delay_ms(1u32);
     }
     }
 }

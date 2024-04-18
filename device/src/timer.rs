@@ -23,7 +23,7 @@ fn SysTick() {
 pub struct SystickDelay {}
 
 impl DelayNs for SystickDelay {
-    fn delay_ns(&mut self, ms: u32) -> Result<(), Self::Error> {
+    fn delay_ns(&mut self, ms: u32) {
         let start = SYSTICK_COUNT.load(Ordering::Relaxed) as u32 / 10;
 
         crate::trace!("Starting delay at {} for {} ms", start, ms);
@@ -41,8 +41,6 @@ impl DelayNs for SystickDelay {
                 break;
             }
         }
-
-        Ok(())
     }
 }
 

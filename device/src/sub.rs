@@ -2,9 +2,12 @@
 #![no_std]
 #![no_main]
 
+#![feature(lazy_cell)]
 #![feature(alloc_error_handler)]
 
 use core::alloc::Layout;
+use core::borrow::BorrowMut;
+use core::num::NonZeroU32;
 use core::panic::PanicInfo;
 use core::str::FromStr;
 use core::convert::TryFrom;
@@ -17,6 +20,8 @@ use cortex_m_rt::{entry};
 
 use cortex_m::peripheral::syst::SystClkSource;
 
+use dsf_core::options::Filters;
+use embedded_graphics::primitives::Rectangle;
 use rand_core::RngCore;
 
 #[cfg(not(feature = "defmt"))]
@@ -44,7 +49,6 @@ use hal::{serial::Serial, spi::Spi, i2c::I2c};
 
 
 use rand_core::{SeedableRng};
-use rand_facade::GlobalRng;
 use rand_chacha::ChaChaRng;
 
 use radio_sx128x::prelude::*;
@@ -54,14 +58,21 @@ use lpwan::prelude::*;
 use lpwan::mac_802154::{SyncState, AssocState};
 
 use embedded_graphics::{
-    fonts::{Font12x16, Text},
+    text::Text,
+    mono_font::{ascii::FONT_6X12, MonoTextStyle},
     pixelcolor::BinaryColor,
     prelude::*,
 };
-use embedded_text::prelude::*;
+use embedded_text::{TextBox, 
+    style::{TextBoxStyleBuilder, HeightMode},
+    alignment::{
+        HorizontalAlignment,
+        VerticalAlignment,
+    },
+};
 use ssd1306::{mode::TerminalMode, prelude::*, I2CDisplayInterface, Ssd1306};
 
-use dsf_core::prelude::*;
+use dsf_core::{prelude::*, base::{Encode, Decode}};
 
 use dsf_iot::prelude::*;
 use dsf_engine::{store::Store};
@@ -75,16 +86,36 @@ mod timer;
 use timer::SystickDelay;
 
 mod common;
-use common::{StaticKeyStore, DEVICE_KEYS, HeaplessStore, RadioComms};
+use common::{StaticKeyStore, device_keys, HeaplessStore, RadioComms};
 
-
-lazy_static::lazy_static! {
-    pub static ref PUB_ID: Id = Id::from_str("cVeVtbMqQCgl7CtWHk-oYFIarxgp4v63VsNu2ML_ApM=").unwrap();
-}
 
 #[global_allocator]
 static ALLOCATOR: CortexMHeap = CortexMHeap::empty();
 const ALLOC_SIZE: usize = 20 * 1024;
+
+// Bind custom OS RNG
+getrandom::register_custom_getrandom!(os_rand);
+
+static mut RNG: Option<ChaChaRng> = None;
+
+// OS RNG function
+pub fn os_rand(buf: &mut [u8]) -> Result<(), getrandom::Error> {
+    unsafe {
+        let rng = match RNG.borrow_mut() {
+            Some(rng) => rng,
+            None => {
+                let code = NonZeroU32::new(1).unwrap();
+                return Err(getrandom::Error::from(code))
+            }
+        };
+
+
+        rng.fill_bytes(buf);
+    }
+
+    Ok(())
+}
+
 
 const LOG_FILTERS: &'static [&'static str] = &[ "radio_sx128x" ];
 
@@ -116,9 +147,9 @@ fn main() -> ! {
 
     // Setup serial (and logging)
     let uart_cfg = serial::config::Config::default().baudrate(115_200.bps());
-    let uart_tx = gpiod.pd8.into_alternate_af7();
-    let uart_rx = gpiod.pd9.into_alternate_af7();
-    let uart = Serial::usart3(device.USART3, (uart_tx, uart_rx), uart_cfg, clocks).unwrap();
+    let uart_tx = gpiod.pd8.into_alternate();
+    let uart_rx = gpiod.pd9.into_alternate();
+    let uart = Serial::new(device.USART3, (uart_tx, uart_rx), uart_cfg, &clocks).unwrap();
 
     SerialLogger::init(Level::Info, Box::new(uart), LOG_FILTERS);
 
@@ -137,12 +168,16 @@ fn main() -> ! {
 
     info!("Starting subscriber with ID: {}", chip_id);
 
+    let device_keys = device_keys();
+    let pub_id = Id::from_str("G3hsdihnnWH5DX5VsNvGrnyEGU3VCHjgcMijRp9RpqZH").unwrap();
+
     debug!("Configuring RNG");
 
     // Setup RNG
-    let dev_rng = device.RNG.constrain(clocks);
-    let mut chacha_rng = ChaChaRng::from_rng(dev_rng).unwrap();
-    let _rng_guard = GlobalRng::set(core::pin::Pin::new(&mut chacha_rng));
+    let dev_rng = device.RNG.constrain(&clocks);
+    let chacha_rng = ChaChaRng::from_rng(dev_rng).unwrap();
+    unsafe { RNG = Some(chacha_rng) };
+
 
     let mut keystore = StaticKeyStore::new();
 
@@ -157,38 +192,36 @@ fn main() -> ! {
         gpiof.pf3.into_push_pull_output(),
     );
 
-    let _ = rf_cs.try_set_high();
-    let _ = rf_ant.try_set_high();
+    let _ = rf_cs.set_high();
+    let _ = rf_ant.set_high();
 
     // Setup SPI
     let (spi_mosi, spi_miso, spi_sck) = {(
-        gpioa.pa7.into_alternate_af5().set_speed(Speed::VeryHigh),
-        gpioa.pa6.into_alternate_af5().set_speed(Speed::VeryHigh),
-        gpioa.pa5.into_alternate_af5().set_speed(Speed::VeryHigh),
+        gpioa.pa7.into_alternate().speed(Speed::VeryHigh),
+        gpioa.pa6.into_alternate().speed(Speed::VeryHigh),
+        gpioa.pa5.into_alternate().speed(Speed::VeryHigh),
     )};
-    let spi = Spi::spi1(device.SPI1, (spi_sck, spi_miso, spi_mosi), MODE_0, 1.MHz().into(), clocks);
+    let spi = Spi::new(device.SPI1, (spi_sck, spi_miso, spi_mosi), MODE_0, 1.MHz().into(), &clocks);
+    let rf_spi = embedded_hal_bus::spi::ExclusiveDevice::new_no_delay(spi, rf_cs);
 
 
     // Setup I2C
     let (i2c_scl, i2c_sda) = {(
-        gpiob.pb10.into_alternate_af4().set_speed(Speed::VeryHigh).internal_pull_up(true).set_open_drain(),
-        gpiob.pb11.into_alternate_af4().set_speed(Speed::VeryHigh).internal_pull_up(true).set_open_drain(),
+        gpiob.pb10.into_alternate().speed(Speed::VeryHigh).internal_pull_up(true).set_open_drain(),
+        gpiob.pb11.into_alternate().speed(Speed::VeryHigh).internal_pull_up(true).set_open_drain(),
     )};
 
-    let i2c = I2c::i2c2(device.I2C2, (i2c_scl, i2c_sda), 100.khz(), clocks);
+    let i2c = I2c::new(device.I2C2, (i2c_scl, i2c_sda), 100.kHz(), &clocks);
 
     // Setup display
     let disp_if = I2CDisplayInterface::new(i2c);
-    let mut disp = Ssd1306::new(disp_if, DisplaySize128x64, DisplayRotation::Rotate0);
+    let mut disp = Ssd1306::new(disp_if, DisplaySize128x64, DisplayRotation::Rotate0)
+        .into_buffered_graphics_mode();
     disp.init().unwrap();
 
-    let text_style = TextStyleBuilder::new(Font12x16)
-    .text_color(BinaryColor::On)
-    .build();
-
-    let textbox_style = TextBoxStyleBuilder::new(Font12x16)
-        .text_color(BinaryColor::On)
-        .height_mode(FitToText)
+    let text_style = MonoTextStyle::new(&FONT_6X12, BinaryColor::On);
+    let textbox_style = TextBoxStyleBuilder::new()
+        .height_mode(HeightMode::FitToText)
         .build();
 
     // Setup a timer object
@@ -201,7 +234,7 @@ fn main() -> ! {
 
     // Initialise radio
     let rf_config = common::rf_config();
-    let mut radio = match Sx128x::spi(spi, rf_cs, rf_busy, rf_ready, rf_rst, delay, &rf_config) {
+    let mut radio = match Sx128x::spi(rf_spi, rf_busy, rf_ready, rf_rst, delay, &rf_config) {
         Ok(v) => v,
         Err(e) => {
             panic!("Error initialising radio: {:?}", e);
@@ -235,18 +268,21 @@ fn main() -> ! {
     let sixlo_cfg = SixLoConfig{
         ..Default::default()
     };
-    let mut sixlo = SixLo::<_, _, 127>::new(mac, MacAddress::Extended(PanId(1), address), sixlo_cfg);
+    let mut sixlo = SixLo::<_, 127>::new(mac, MacAddress::Extended(PanId(1), address), sixlo_cfg);
 
 
-    let info = IotInfo::new(&[]).unwrap();
+    let info = IotInfo::<4>::new(&[]).unwrap();
 
     let comms = RadioComms::new();
-    let store = HeaplessStore::new();
+    //let store = HeaplessStore::new();
 
-    let keys = DEVICE_KEYS.iter().find(|(c, _k)| *c == chip_id);
+    let keys = device_keys.iter().find(|(c, _k)| *c == chip_id);
     if let Some(k) = &&keys {
-        store.set_ident(&k.1);
+        //store.set_ident(&k.1);
     }
+
+    #[cfg(nope)]
+    {
 
     let mut engine = match IotEngine::new(info, &[], comms, store) {
         Ok(e) => e,
@@ -255,16 +291,14 @@ fn main() -> ! {
             loop {}
         }
     };
+    }
 
-    loop {}
-
-    #[cfg(nope)]
     {
 
     // TODO: set kind to IotService
     let mut sb = ServiceBuilder::default();
     
-    let keys = DEVICE_KEYS.iter().find(|(c, _k)| *c == chip_id);
+    let keys = device_keys.iter().find(|(c, _k)| *c == chip_id);
     if let Some(k) = keys {
         sb = sb.private_key(k.1.pri_key.clone().unwrap());
     }
@@ -274,7 +308,7 @@ fn main() -> ! {
     info!("Service ID: {}", s.id().to_string());
  
     let mut buff = [0u8; 1024];
-    let (n, _p) = s.publish_primary(&mut buff).unwrap();
+    let (n, _p) = s.publish_primary(Default::default(), &mut buff).unwrap();
 
     let primary = &buff[..n];
 
@@ -285,10 +319,12 @@ fn main() -> ! {
     let mut rf_buff = [0u8; 512];
     let mut net_state = NetState::None;
     let mut sub_state = SubState::None;
-    let mut req_id = GlobalRng::get().next_u32() as u16;
+    let mut req_id = rand_core::OsRng{}.next_u32() as u16;
 
-    let mut eps = alloc::vec::Vec::new();
-    let mut dat = alloc::vec::Vec::new();
+    let mut iot_info = IotInfo::<4>::default();
+    let mut iot_data = IotData::<4>::default();
+    let mut n1 = 0;
+    
     let mut last_display_update = 0;
     let mut last_state = 0;
 
@@ -302,13 +338,13 @@ fn main() -> ! {
 
         // TODO: check for received packets
         if let Ok(Some((n, addr, _hdr))) = sixlo.receive(now, &mut rf_buff) {
-            let payload = &rf_buff[..n];
+            let payload = &mut rf_buff[..n];
 
             trace!("Received {} byte packet", n);
-            trace!("Page: {:02x?}", &rf_buff[..n]);
+            trace!("Page: {:02x?}", &payload);
 
-            let (base, _n) = match Base::parse(payload, &keystore) {
-                Ok(v) => (v),
+            let base = match Container::parse(payload, &keystore) {
+                Ok(v) => v,
                 Err(e) => {
                     error!("DSF parsing error: {:?}", e);
                     continue;
@@ -316,84 +352,77 @@ fn main() -> ! {
             };
 
             let id = base.id().clone();
-
-            match (NetMessage::convert(base.clone(), &keystore), Page::try_from(base)) {
-                (Ok(NetMessage::Request(req)), _) => {
-                    // Handle discovery requests
-                    if let NetRequestKind::Hello = &req.data {
-                        // NOTE: removed for client-based discovery
-                    } else if let NetRequestKind::PushData(id, _d) = &req.data {
-                        info!("Received push-data for service: {}", id);
-
-                    } else {
-                        warn!("Unhandled DSF request");
-                    }
-                },
-                (Ok(NetMessage::Response(resp)), _) => {
-                    match (&net_state, &sub_state, &resp.data) {
-                        (NetState::Joining(gw), _, NetResponseKind::Status(s)) if *s == dsf_core::net::Status::Ok => {
-                            info!("Received join response");
-                            net_state = NetState::Joined(*gw);
-                        },
-                        (NetState::Joined(gw), SubState::Subscribing(req_id), _) => {
-                            info!("Received subscribe response");
-                            // TODO: handle subscribe response
-                            sub_state = SubState::Subscribed;
-                        },
-                        _ => {
-                            warn!("Unhandled DSF response");
+            let header = base.header();
+            
+            // Handle messages
+            if header.kind().is_message() {
+                match NetMessage::convert(base, &keystore){
+                    Ok(NetMessage::Request(req)) => {
+                        // Handle discovery requests
+                        if let NetRequestBody::Hello = &req.data {
+                            // NOTE: removed for client-based discovery
+                        } else if let NetRequestBody::PushData(id, _d) = &req.data {
+                            info!("Received push-data for service: {}", id);
+    
+                        } else {
+                            warn!("Unhandled DSF request");
                         }
-                    }
-                },
-                (_, Ok(p)) => {
-                    // Decode page
-                    match p.info().clone() {
-                        PageInfo::Primary(pri) => {
-                            let ps = IotService::decode_page(p, None).unwrap();
-
-                            info!("Subscribed to service ID: {}", ps.id);
-
-                            keystore.insert(id.clone(), Keys::new(pri.pub_key.clone()));
-
-                            eps = ps.endpoints.clone();
-
-                            info!("Endpoints: ");
-                            for i in 0..ps.endpoints.len() {
-                                let e = &ps.endpoints[i];
-
-                                info!("  - {:2}: {:?}", i, e.kind);
+                    },
+                    Ok(NetMessage::Response(resp)) => {
+                        match (&net_state, &sub_state, &resp.data) {
+                            (NetState::Joining(gw), _, NetResponseBody::Status(s)) if *s == dsf_core::net::Status::Ok => {
+                                info!("Received join response");
+                                net_state = NetState::Joined(*gw);
+                            },
+                            (NetState::Joined(gw), SubState::Subscribing(req_id), _) => {
+                                info!("Received subscribe response");
+                                // TODO: handle subscribe response
+                                sub_state = SubState::Subscribed;
+                            },
+                            _ => {
+                                warn!("Unhandled DSF response");
                             }
-
-                            sub_state = SubState::Subscribed;
-                        },
-                        PageInfo::Data(_) => {
-                            let sd = IotData::decode_page(p, None).unwrap();
-
-                            let mut buff = alloc::string::String::new();
-
-                            dat = sd.data.clone();
-
-                            info!("Received data");
-                            for i in 0..sd.data.len() {
-                                let ep_data = &sd.data[i];
-                    
-                                info!("  - {:2}: {:.02}", i, ep_data.value);
-                            }
-                        },
-                        _ => (),
-                    }
-
-                },
-                _ => {
-                    error!("DSF rx was not a network message");
-                    continue;
+                        }
+                    },
+                    _ => error!("Message parsing failed"),
                 }
-            };
 
+            // Handle page objects
+            } else if header.kind().is_page() {
+                let id = base.id();
+                (iot_info, _) = IotInfo::<4>::decode(base.body_raw()).unwrap();
+                
+                // Cache service keys
+                if let Some(pub_key) = base.public_options_iter().pub_key() {
+                    keystore.insert(id.clone(), Keys::new(pub_key.clone()));
+                }
+
+                info!("Subscribed to service ID: {}", id);
+
+                info!("Endpoints: ");
+                for i in 0..iot_info.descriptors.len() {
+                    let e = &iot_info.descriptors[i];
+
+                    info!("  - {:2}: {:?}", i, e.kind);
+                }
+
+                sub_state = SubState::Subscribed;
+
+            // Handle data objects
+            } else if header.kind().is_data() {
+                (iot_data, _) = IotData::decode(base.body_raw()).unwrap();
+
+                info!("Received data");
+                for i in 0..iot_data.data.len() {
+                    let ep_data = &iot_data.data[i];
+        
+                    info!("  - {:2}: {:.02}", i, ep_data.value);
+                }
+            }
 
         } else {
 
-            if let (SyncState::Synced(gw), AssocState::Associated(pan)) = sixlo.mac().state() {
+            if let Ok(MacState::Synced(gw)) = sixlo.mac().state() {
 
                 match (&net_state, &sub_state) {
                     (NetState::None, _) => {
@@ -414,15 +443,15 @@ fn main() -> ! {
                     }
                     (NetState::Joined(_), SubState::None) => {
                         // Generate subscribe request
-                        let sub_req = NetRequestKind::Subscribe(PUB_ID.clone());
+                        let sub_req = NetRequestBody::Subscribe(pub_id.clone());
                         let mut req = NetRequest::new(s.id(), req_id, sub_req, Flags::PUB_KEY_REQUEST);
                         req.set_public_key(s.public_key());
     
-                        let n = s.encode_message(NetMessage::Request(req), &mut rf_buff).unwrap();
+                        let c = s.encode_request(&req, &Keys::default(), &mut rf_buff).unwrap();
     
                         info!("Issuing subscribe to gw: {:?}", gw);
     
-                        if let Err(e) = sixlo.transmit(now, gw, &rf_buff[..n]) {
+                        if let Err(e) = sixlo.transmit(now, gw, c.raw()) {
                             error!("MAC transmit error: {:?}", e);
                         }
     
@@ -439,14 +468,17 @@ fn main() -> ! {
         }
 
         if (now / 500) % 2 == 0 {
-            led0.try_set_high().unwrap();
+            led0.set_high();
         } else {
-            led0.try_set_low().unwrap();
+            led0.set_low();
         }
 
         if now > (last_display_update + DISPLAY_UPDATE_MS) {
             
             let mut buff = alloc::string::String::new();
+
+            let dat = &iot_data.data[..];
+            let eps = &iot_info.descriptors[..];
 
             if dat.len() > 0 && eps.len() > 0 {
                 for i in 0..eps.len() {
@@ -462,17 +494,17 @@ fn main() -> ! {
                 }
             }
 
-            let bounds = Rectangle::new(Point::zero(), Point::new(128, 0));
-            let text_box = TextBox::new(buff.as_str(), bounds).into_styled(textbox_style);
+            let bounds = Rectangle::new(Point::zero(), Size::new(128, 0));
+            let text_box = TextBox::with_textbox_style(buff.as_str(), bounds, text_style, textbox_style);
 
-            disp.clear();
+            disp.clear(BinaryColor::Off).unwrap();
             text_box.draw(&mut disp).unwrap();
             disp.flush().unwrap();
 
             last_display_update = now;
         }
 
-        SystickDelay{}.try_delay_ms(1u32).unwrap();
+        SystickDelay{}.delay_ms(1u32);
     }
     }
 }

@@ -1,4 +1,5 @@
 
+use core::cell::LazyCell;
 use core::marker::PhantomData;
 use core::str::FromStr;
 use core::fmt::Debug;
@@ -6,27 +7,30 @@ use core::fmt::Debug;
 use dsf_core::prelude::*;
 use dsf_core::keys::{Keys, KeySource};
 
+use dsf_engine::store::ObjectFilter;
 use dsf_engine::{comms::Comms, store::{Store, ObjectInfo, Peer, StoreFlags}};
 
+use heapless::sorted_linked_list::Iter;
 use radio_sx128x::prelude::*;
 use radio_sx128x::{Config as Sx128xConfig};
 
-lazy_static::lazy_static! {
-    pub static ref DEVICE_KEYS: [(u64, Keys); 2] = [
+pub fn device_keys() -> [(u64, Keys); 2] {
+    [
         (30068834336, Keys {
-            pub_key: PublicKey::from_str("oStasHnvHkXQ5SAMKRvFUMxxrwnEPmuGrgsJ-t8J520=").ok(),
-            pri_key: PrivateKey::from_str("ui5TZvy5NCHkHK7HuNJkhDQDKcLKXVnmvcNKsl4I3lehK1qwee8eRdDlIAwpG8VQzHGvCcQ-a4auCwn63wnnbQ==").ok(),
-            sec_key: SecretKey::from_str("QeXiB8ogpgecLEHSlXUP-LVxim_Rlf8qwDf40zke5So=").ok(),
+            pub_key: PublicKey::from_str("BRPdsZXDnr6jfWZNVCDWw8s2faTMhfhv2T9u3L1TT2ix").ok(),
+            pri_key: PrivateKey::from_str("46YQK7Vscpwwh9EFuF72bAvNDTvjM9fXthmQjVgw8svnZ6VRPtLLB4cYyfhB6qaGzCqQaJVc4YYJ1HEh5jr79J5h").ok(),
+            sec_key: SecretKey::from_str("Er4sf4TU7qrrbX4ziNZJCLwvahnku6MEzRtSsvARkF7L").ok(),
             sym_keys: None,
         }),
         (17182883907, Keys{
-            pub_key: PublicKey::from_str("W-tdno4Js2qvQTsUwJMb6Ga4xEMCiJIqWwHpwokiXGo=").ok(),
-            pri_key: PrivateKey::from_str("Dtaqdqxj0KQmoySJyZ-5B9AI1z99-Jp49YqC8M635ndb612ejgmzaq9BOxTAkxvoZrjEQwKIkipbAenCiSJcag==").ok(),
-            sec_key: SecretKey::from_str("lcXASg0RQX1_d3qW82S4aOlDx0WZMXgVjbZmfQWUA6Q=").ok(),
+            pub_key: PublicKey::from_str("86Zaq2E4T1B2Sm5G2YFmp5eNrWLYLLeEnvetmWb86mNy").ok(),
+            pri_key: PrivateKey::from_str("37G3aJhdhNTFRnqEVAb9Ku7UwxNxLa2gXetP9FYHDApefkc5j27aBjrqEJ5enpxyHd9HQDEK4zb7UQJxf1nGo6F9").ok(),
+            sec_key: SecretKey::from_str("7516cAWs3wazvDZLEF6mQGJ5af58Ef4CkEAqE3oTnWvj").ok(),
             sym_keys: None,
         }),
-    ];
+    ]
 }
+
 
 pub struct StaticKeyStore {
     k: [Option<(Id, Keys)>; 12],
@@ -114,7 +118,7 @@ impl Comms for RadioComms {
 pub struct HeaplessStore<Addr: Clone + Debug + 'static> {
     pub our_keys: Option<Keys>,
     pub last_sig: Option<ObjectInfo>,
-    pub peers: heapless::LinearMap<Id, Peer<Addr>, 8>,
+    pub peers: heapless::Vec<(Id, Peer<Addr>), 8>,
     pub pages: heapless::LinearMap<Signature, Container, 16>,
     _addr: PhantomData<Addr>,
 }
@@ -124,14 +128,13 @@ impl <Addr: Clone + Debug + 'static> HeaplessStore<Addr> {
         Self {
             our_keys: None,
             last_sig: None,
-            peers: heapless::LinearMap::new(),
+            peers: heapless::Vec::new(),
             pages: heapless::LinearMap::new(),
             _addr: PhantomData,
         }
     }
 }
 
-#[cfg(nyet)]
 impl <Addr: Clone + Debug + 'static> Store for HeaplessStore<Addr> {
     const FEATURES: StoreFlags = StoreFlags::empty();
 
@@ -139,10 +142,10 @@ impl <Addr: Clone + Debug + 'static> Store for HeaplessStore<Addr> {
 
     type Error = ();
 
-    type Iter<'a> = todo!();
+    type Iter<'a> = PeerIter<'a, Addr>;
 
     fn get_ident(&self) -> Result<Option<Keys>, Self::Error> {
-        Ok(self.our_keys)
+        Ok(self.our_keys.clone())
     }
 
     fn set_ident(&mut self, keys: &Keys) -> Result<(), Self::Error> {
@@ -150,8 +153,20 @@ impl <Addr: Clone + Debug + 'static> Store for HeaplessStore<Addr> {
         Ok(())
     }
 
+    fn get_service(&self, id: &Id) -> Result<Option<Service>, Self::Error> {
+        Ok(None)
+    }
+    
+    fn update_service<R: Debug, F: Fn(&mut Service) -> R>(
+        &mut self,
+        id: &Id,
+        f: F,
+    ) -> Result<R, Self::Error> {
+        Err(())
+    }
+
     fn get_last(&self) -> Result<Option<ObjectInfo>, Self::Error> {
-        Ok(self.last_sig)
+        Ok(self.last_sig.clone())
     }
 
     #[cfg(nyet)]
@@ -169,20 +184,45 @@ impl <Addr: Clone + Debug + 'static> Store for HeaplessStore<Addr> {
     }
 
     fn peers<'a>(&'a self) -> Self::Iter<'a> {
-        self.peers.iter()
+        PeerIter{index: 0, peers: &self.peers}
     }
 
-    fn store_page<T: dsf_core::types::ImmutableData>(&mut self, sig: &Signature, p: &dsf_core::wire::Container<T>) -> Result<(), Self::Error> {
+    fn store_page<T: dsf_core::types::ImmutableData>(&mut self, p: &dsf_core::wire::Container<T>) -> Result<(), Self::Error> {
         todo!()
     }
 
-    fn fetch_page(&mut self, sig: &Signature) -> Result<Option<dsf_core::wire::Container>, Self::Error> {
+    fn fetch_page<T: MutableData>(
+        &mut self,
+        f: ObjectFilter,
+        mut buff: T) -> Result<Option<dsf_core::wire::Container<T>>, Self::Error> {
         todo!()
     }
+    
 }
 
 impl <Addr: Clone + Debug> KeySource for HeaplessStore<Addr> {
     fn keys(&self, id: &Id) -> Option<Keys> {
         todo!()
+    }
+}
+
+pub struct PeerIter<'a, Addr: Clone + Debug> {
+    peers: &'a heapless::Vec<(Id, Peer<Addr>), 8>,
+    index: usize,
+}
+
+impl <'a, Addr: Clone + Debug> Iterator for PeerIter<'a, Addr> {
+    type Item = (&'a Id, &'a Peer<Addr>);
+    
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index >= self.peers.len() {
+            return None;
+        }
+
+        let p = &self.peers[self.index];
+
+        self.index += 1;
+
+        Some((&p.0, &p.1))
     }
 }
