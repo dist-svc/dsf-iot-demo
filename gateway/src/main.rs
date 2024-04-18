@@ -30,6 +30,7 @@ use dsf_core::{
 };
 
 use dsf_iot::prelude::*;
+use rand::random;
 
 #[derive(Debug, Parser)]
 struct Options {
@@ -93,7 +94,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Initialise logging
     let log_cfg = simplelog::ConfigBuilder::new()
-        //.add_filter_ignore_str("radio_sx128x")
+        .add_filter_ignore_str("radio_sx128x")
         .add_filter_ignore_str("driver_cp2130")
         .build();
     let _ = simplelog::SimpleLogger::init(opts.log_level, log_cfg);
@@ -201,7 +202,7 @@ async fn main() -> anyhow::Result<()> {
 
     let mut rf_buff = [0u8; 512];
 
-    let mut req_id = 0;
+    let mut req_id = random();
 
     // Handshake with DSF daemon to exchange keys
     let mut req = net::Request::new(
@@ -298,6 +299,21 @@ async fn main() -> anyhow::Result<()> {
                             continue;
                         }
                     }
+
+                    // Setup register request
+                    let req_body = net::RequestBody::Register(s.id(), vec![base.to_owned()]);
+                    let mut req =
+                        net::Request::new(service.id(), req_id, req_body, Flags::PUB_KEY_REQUEST);
+                    req.set_public_key(service.public_key());
+
+                    // Register request to service ID for response handling
+                    reqs.insert(req_id, s.id());
+
+                    // Issue request
+                    let c = service.encode_request_buff::<1024>(&req, &Default::default())?;
+                    udp_socket.send(c.raw())?;
+
+                    req_id = req_id.wrapping_add(1);
                 }
                 // Handle data for known services
                 (true, BaseKind::Data) => {
@@ -420,6 +436,8 @@ async fn main() -> anyhow::Result<()> {
                         }
                     }
                     NetMessage::Response(resp) => {
+                        info!("Receive DSF response: {resp:?}");
+
                         // Locate device with pending request
                         let device =
                             match reqs.remove(&resp.id).map(|id| devices.get(&id)).flatten() {
@@ -429,6 +447,8 @@ async fn main() -> anyhow::Result<()> {
                                     continue;
                                 }
                             };
+
+                        debug!("Found device match: {device:?}");
 
                         match &resp.data {
                             // Strip primary page from ValuesFound message

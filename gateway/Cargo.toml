@@ -31,35 +31,23 @@ dsf-core = { version = "0.3.0", features = [ "std" ] }
 dsf-client = { version = "0.3.0" }
 dsf-iot = { version = "*", features = [ "std", "alloc" ], default-features = false }
 
-driver-pal = { version = "0.8.0", features = [ "hal", "hal-linux", "hal-cp2130" ], default-features = false }
-radio = "0.11.1"
-radio-sx128x = { version = "0.18.0", default-features = false }
-lpwan = { version = "*" }
+driver-pal = { version = "0.9.0", features = [ "hal", "hal-linux", "hal-cp2130" ], default-features = false }
+radio = "0.12.1"
+radio-sx128x = { version = "0.19.0", default-features = false }
+lpwan = { version = "0.1.0" }
 
 rand-facade = { version = "*", features = [ "os_rng" ], default-features = false }
 
 
 [patch.crates-io]
-#embedded-hal = { git = "https://github.com/ryankurte/embedded-hal.git", branch = "feature/spi-transactions" }
 
-#embedded-spi = { path = "../rust-embedded-spi" }
-#linux-embedded-hal = { path = "../linux-embedded-hal" }
-#radio = { path = "../rust-radio" }
-#radio-sx128x = { path = "../rust-radio-sx128x" }
-
+# Patch dsf crates to sync sub-dependencies
 dsf-core = { path = "../../dsf/core" }
 dsf-rpc = { path = "../../dsf/rpc" }
 dsf-client = { path = "../../dsf/client" }
 dsf-engine = { path = "../../dsf/engine" }
 dsf-iot = { path = "../../dsf-iot" }
 
-#radio-sx128x = { git = "https://github.com/ryankurte/rust-radio-sx128x" }
-
+lpwan = { git = "https://github.com/rust-iot/rust-lpwan", branch = "main" }
 ieee802154 = { git = "https://github.com/ryankurte/rust-ieee802.15.4", branch = "feature/802.15.4-2015-simple" }
 
-stor = { path = "../../rust-stor" }
-lpwan = { path = "../../rust-lpwan" }
-radio = { path = "../../radio/radio" }
-radio-sx128x = { path = "../../radio/radio-sx128x" }
-driver-cp2130 = { path = "../../radio/driver-cp2130" }
-driver-pal = { path = "../../radio/driver-pal" }

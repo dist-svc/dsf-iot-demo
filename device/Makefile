@@ -17,7 +17,7 @@ run-sub:
 	${ARGS} cargo run --bin dsf-sub --release -- --probe 0483:374b:0671FF323338424E43111241
 
 flash-pub:
-	${ARGS} cargo flash --bin dsf-pub --release --probe 0483:374b:066BFF504955657867073629
+	${ARGS} cargo flash --bin dsf-pub --release --chip STM32F429ZITx --probe 0483:374b:066BFF504955657867073629
 
 flash-sub:
-	${ARGS} cargo flash --bin dsf-sub --release --probe 0483:374b:0671FF323338424E43111241
+	${ARGS} cargo flash --bin dsf-sub --release --chip STM32F429ZITx --probe 0483:374b:0671FF323338424E43111241

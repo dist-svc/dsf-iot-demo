@@ -81,7 +81,7 @@ use common::{device_keys, HeaplessStore, RadioComms, StaticKeyStore};
 static ALLOCATOR: CortexMHeap = CortexMHeap::empty();
 const ALLOC_SIZE: usize = 20 * 1024;
 
-const LOG_FILTERS: &'static [&'static str] = &[];
+const LOG_FILTERS: &'static [&'static str] = &[ "radio_sx128x" ];
 
 // https://dev.to/minkovsky/rusted-brains-running-rust-firmware-on-a-cortex-m-microcontroller-3had
 //static TIMER_TIM2: Mutex<RefCell<Option<Timer<stm32::TIM2>>>> = Mutex::new(RefCell::new(None));
@@ -345,6 +345,8 @@ fn main() -> ! {
 
         info!("Generated primary page of {} bytes", n);
 
+        debug!("page: {:02x?}", primary);
+
         info!("Starting app");
 
         let mut rf_buff = [0u8; 512];
@@ -407,6 +409,11 @@ fn main() -> ! {
                         info!("Received response {}", m.request_id());
 
                         info!("{:?}", resp.data);
+
+                        if let NetState::Joining(gw) = net_state {
+                            net_state = NetState::Joined(gw);
+                            info!("Join complete");
+                        }
                     }
                     // TODO: handle data requests
                     _ => {
@@ -428,43 +435,45 @@ fn main() -> ! {
 
                         net_state = NetState::Joining(gw);
                     }
+                    NetState::Joined(_) => {
+                        if (now > (last_reading + 10_000)) || last_reading == 0 {
+                            debug!("Measurement start");
+        
+                            let m = bme280.measure(&mut bme_delay).unwrap();
+        
+                            info!(
+                                "Measurement temp: {} press: {} humid: {}",
+                                m.temperature as i32, m.pressure as i32, m.humidity as i32
+                            );
+        
+                            let endpoint_data = IotData::<4>::new(&[
+                                EpData::new(roundf(m.temperature).into()),
+                                EpData::new(roundf(m.pressure / 1000.0).into()),
+                                EpData::new(roundf(m.humidity).into()),
+                            ])
+                            .unwrap();
+        
+                            let page_opts = DataOptions {
+                                body: Some(endpoint_data),
+                                ..Default::default()
+                            };
+        
+                            let mut page_buff = [0u8; 512];
+                            let (n, _p) = s.publish_data(page_opts, &mut page_buff[..]).unwrap();
+                            let data = &page_buff[..n];
+        
+                            info!("Transmitting data object of {} bytes to: {:?}", n, gw);
+        
+                            if let Err(e) = sixlo.transmit(now, gw, data) {
+                                error!("MAC transmit error: {:?}", e);
+                            }
+        
+                            last_reading = SystickDelay {}.ticks_ms();
+                        }
+                    }
                     _ => (),
                 }
 
-                if now > (last_reading + 10_000) {
-                    debug!("Measurement start");
-
-                    let m = bme280.measure(&mut bme_delay).unwrap();
-
-                    info!(
-                        "Measurement temp: {} press: {} humid: {}",
-                        m.temperature as i32, m.pressure as i32, m.humidity as i32
-                    );
-
-                    let endpoint_data = IotData::<4>::new(&[
-                        EpData::new(roundf(m.temperature).into()),
-                        EpData::new(roundf(m.pressure / 1000.0).into()),
-                        EpData::new(roundf(m.humidity).into()),
-                    ])
-                    .unwrap();
-
-                    let page_opts = DataOptions {
-                        body: Some(endpoint_data),
-                        ..Default::default()
-                    };
-
-                    let mut page_buff = [0u8; 512];
-                    let (n, _p) = s.publish_data(page_opts, &mut page_buff[..]).unwrap();
-                    let data = &page_buff[..n];
-
-                    info!("Transmitting data object of {} bytes to: {:?}", n, gw);
-
-                    if let Err(e) = sixlo.transmit(now, gw, data) {
-                        error!("MAC transmit error: {:?}", e);
-                    }
-
-                    last_reading = SystickDelay {}.ticks_ms();
-                }
             } else {
                 net_state = NetState::None;
                 led1.set_low();

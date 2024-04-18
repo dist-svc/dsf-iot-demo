@@ -707,7 +707,9 @@ dependencies = [
 
 [[package]]
 name = "driver-cp2130"
-version = "1.0.0"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4d41c41bb1c63f44c9dd742e39492fbc580506b3b704b91cf45f36be50e99d6"
 dependencies = [
  "bitflags 1.3.2",
  "byteorder",
@@ -725,7 +727,9 @@ dependencies = [
 
 [[package]]
 name = "driver-pal"
-version = "0.8.0"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "915d7c338d7deef785f8a30e5679267847db5b2681f13b86c796846024ef9647"
 dependencies = [
  "clap",
  "driver-cp2130",
@@ -1603,6 +1607,7 @@ checksum = "90ed8c1e510134f979dbc4f070f87d4313098b704861a105fe34231c70a3901c"
 [[package]]
 name = "lpwan"
 version = "0.1.0"
+source = "git+https://github.com/rust-iot/rust-lpwan?branch=main#c039e36cd2f25d152d2ae934a1b9fddba0142e5f"
 dependencies = [
  "bitflags 1.3.2",
  "byte",
@@ -1614,7 +1619,7 @@ dependencies = [
  "radio",
  "rand_core 0.6.4",
  "smoltcp",
- "strum 0.24.1",
+ "strum 0.26.2",
 ]
 
 [[package]]
@@ -2104,7 +2109,9 @@ dependencies = [
 
 [[package]]
 name = "radio"
-version = "0.11.1"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa4c686c05c7067630840a63ff7cbbd817f9982b0b4cce2f978bbfaf731b104f"
 dependencies = [
  "chrono",
  "embedded-hal",
@@ -2114,7 +2121,9 @@ dependencies = [
 
 [[package]]
 name = "radio-sx128x"
-version = "0.18.0"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ddd1b0a2e7be808201b8b64391517ba476282e751aa0fefde35ec64f3258fd3b"
 dependencies = [
  "bitflags 2.5.0",
  "embedded-hal",
@@ -2679,6 +2688,8 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "stor"
 version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "388f1a4d625c9eb44cf1b47b691e6fba6caa105e906b0d6584df6bcba04db7be"
 dependencies = [
  "heapless",
 ]

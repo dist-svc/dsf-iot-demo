@@ -19,14 +19,14 @@ use radio_sx128x::Config as Sx128xConfig;
 pub fn device_keys() -> [(u64, Keys); 2] {
     [
         (30068834336, Keys {
-            pub_key: PublicKey::from_str("BRPdsZXDnr6jfWZNVCDWw8s2faTMhfhv2T9u3L1TT2ix").ok(),
-            pri_key: PrivateKey::from_str("46YQK7Vscpwwh9EFuF72bAvNDTvjM9fXthmQjVgw8svnZ6VRPtLLB4cYyfhB6qaGzCqQaJVc4YYJ1HEh5jr79J5h").ok(),
+            pub_key: None,
+            pri_key: PrivateKey::from_str("3KCQXA7hLf8c9nAYNDL6UBfE7SoETk45vM6aLmTyX969dLwwvtZZVo9QQCSsT1bCa2Pgt5pVLWhcH1hUn8yUqfco").ok(),
             sec_key: SecretKey::from_str("Er4sf4TU7qrrbX4ziNZJCLwvahnku6MEzRtSsvARkF7L").ok(),
             sym_keys: None,
         }),
         (17182883907, Keys{
-            pub_key: PublicKey::from_str("86Zaq2E4T1B2Sm5G2YFmp5eNrWLYLLeEnvetmWb86mNy").ok(),
-            pri_key: PrivateKey::from_str("37G3aJhdhNTFRnqEVAb9Ku7UwxNxLa2gXetP9FYHDApefkc5j27aBjrqEJ5enpxyHd9HQDEK4zb7UQJxf1nGo6F9").ok(),
+            pub_key: None,
+            pri_key: PrivateKey::from_str("243oUDopnNFE3eNyBK5mTm4d9KHGuXUMrq7nK9BNbSD9CRPxdLjLAZVEekQi6LEude6rZNXPqEUjqf3Dv7bXnE6w").ok(),
             sec_key: SecretKey::from_str("7516cAWs3wazvDZLEF6mQGJ5af58Ef4CkEAqE3oTnWvj").ok(),
             sym_keys: None,
         }),

@@ -612,6 +612,7 @@ dependencies = [
  "lpwan",
  "nb 0.1.3",
  "num-traits",
+ "radio",
  "radio-sx128x",
  "rand_chacha",
  "rand_core",
@@ -1051,6 +1052,7 @@ checksum = "b5e6163cb8c49088c2c36f57875e58ccd8c87c7427f7fbd50ea6710b2f3f2e8f"
 [[package]]
 name = "lpwan"
 version = "0.1.0"
+source = "git+https://github.com/rust-iot/rust-lpwan?branch=main#c039e36cd2f25d152d2ae934a1b9fddba0142e5f"
 dependencies = [
  "bitflags 1.3.2",
  "byte",
@@ -1061,7 +1063,7 @@ dependencies = [
  "log",
  "radio",
  "rand_core",
- "strum 0.24.1",
+ "strum 0.26.2",
 ]
 
 [[package]]
@@ -1296,7 +1298,9 @@ dependencies = [
 
 [[package]]
 name = "radio"
-version = "0.11.1"
+version = "0.12.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aa4c686c05c7067630840a63ff7cbbd817f9982b0b4cce2f978bbfaf731b104f"
 dependencies = [
  "chrono",
  "embedded-hal 1.0.0",
@@ -1306,7 +1310,9 @@ dependencies = [
 
 [[package]]
 name = "radio-sx128x"
-version = "0.18.0"
+version = "0.19.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ddd1b0a2e7be808201b8b64391517ba476282e751aa0fefde35ec64f3258fd3b"
 dependencies = [
  "bitflags 2.4.0",
  "embedded-hal 1.0.0",
@@ -1830,11 +1836,3 @@ checksum = "525b4ec142c6b68a2d10f01f7bbf6755599ca3f81ea53b8431b7dd348f5fdb2d"
 name = "bme280"
 version = "0.2.1"
 source = "git+https://github.com/ryankurte/bme280-rs?branch=embedded-hal-v1.0.0-alpha#1efde9c649d95d9de70962fa5d422226d4bfa817"
-
-[[patch.unused]]
-name = "driver-pal"
-version = "0.8.0"
-
-[[patch.unused]]
-name = "embedded-hal-compat"
-version = "0.12.0"

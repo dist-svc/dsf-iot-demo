@@ -60,19 +60,17 @@ embedded-hal-bus = "*"
 #embedded-hal-compat = "0.12.0"
 stm32f4xx-hal = { version = "0.20.0", features = ["stm32f429", "usb_fs"] }
 bme280 = "0.5.0"
-radio-sx128x = { version = "0.18.0", default-features = false }
 
+radio = "0.12.1"
+radio-sx128x = { version = "0.19.0", default-features = false }
 ieee802154 = "0.3.0"
-lpwan = { path = "../../rust-lpwan", default-features = false }
+lpwan = { version = "0.1.0", default-features = false }
 
 display-interface = "0.5.0"
 display-interface-i2c = "0.5.0"
 embedded-graphics = "0.8.1"
 embedded-text = { version = "0.7.0", default-features = false }
 ssd1306 = "0.8.4"
-
-#compiler_builtins = { git = "https://github.com/rust-lang/compiler-builtins" }
-
 
 dsf-core = { version = "*", default-features = false, features = [ "alloc" ] }
 dsf-iot = { version = "*", default-features = false, features = [ "alloc" ] }
@@ -110,10 +108,5 @@ dsf-core = { path = "../../dsf/core" }
 dsf-engine = { path = "../../dsf/engine" }
 dsf-iot = { path = "../../dsf-iot" }
 
-radio = { path = "../../radio/radio" }
-radio-sx128x = { path = "../../radio/radio-sx128x" }
-driver-pal = { path = "../../radio/driver-pal" }
-
+lpwan = { git = "https://github.com/rust-iot/rust-lpwan", branch = "main" }
 ieee802154 = { git = "https://github.com/ryankurte/rust-ieee802.15.4", branch = "feature/802.15.4-2015-simple" }
-embedded-hal-compat = { path = "../../embedded-hal-compat" }
-#stm32f4xx-hal = { git = "https://github.com/ryankurte/stm32f4xx-hal", branch = "e-h-1.0.0-alpha" }

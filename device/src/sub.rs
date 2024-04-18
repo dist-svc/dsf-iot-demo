@@ -22,11 +22,15 @@ use dsf_core::options::Filters;
 use embedded_graphics::primitives::Rectangle;
 use rand_core::RngCore;
 
-#[cfg(not(feature = "defmt"))]
+#[cfg(not(feature = "defmt-log"))]
 pub use log::{debug, error, info, trace, warn, Level};
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-log")]
 pub use defmt::{debug, error, info, trace, warn};
+
+// Import global logger
+#[cfg(feature = "defmt-log")]
+use defmt_rtt as _;
 
 extern crate alloc_cortex_m;
 use alloc_cortex_m::CortexMHeap;
