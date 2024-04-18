@@ -1,15 +1,12 @@
-
 // AN4013
 // AN2592
 // http://www.proiotware.com/index.php/9-blogs/9-stm32-chaining-two-16-bit-timers-to-create-32-bit-timer
 
-
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-use cortex_m_rt::{exception};
+use cortex_m_rt::exception;
 
-
-use embedded_hal::delay::{DelayNs};
+use embedded_hal::delay::DelayNs;
 use lpwan::timer::Timer;
 
 static SYSTICK_COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -23,10 +20,12 @@ fn SysTick() {
 pub struct SystickDelay {}
 
 impl DelayNs for SystickDelay {
-    fn delay_ns(&mut self, ms: u32) {
+    fn delay_ns(&mut self, ns: u32) {
         let start = SYSTICK_COUNT.load(Ordering::Relaxed) as u32 / 10;
 
-        crate::trace!("Starting delay at {} for {} ms", start, ms);
+        crate::trace!("Starting delay at {} for {} ns", start, ns);
+
+        let ms = ns / 1000 / 1000;
 
         loop {
             let now = SYSTICK_COUNT.load(Ordering::Relaxed) as u32 / 10;
@@ -54,7 +53,6 @@ impl Timer for SystickDelay {
     }
 }
 
-
 #[cfg(nope)]
 mod chain {
     use stm32f4xx_hal::time::Hertz;
@@ -66,12 +64,9 @@ mod chain {
         tb: T2,
     }
 
-
     impl TimerChain<TIM2, TIM3> {
         fn new(ta: TIM2, tb: TIM3) -> Self {
-            Self {
-                ta, tb,
-            }
+            Self { ta, tb }
         }
 
         fn configure<T: Into<Hertz>>(&mut self, prescaler: T) {
@@ -86,31 +81,30 @@ mod chain {
             // Setup timer A as controller
 
             // Set timer in upcounting mode
-            self.ta.cr1.modify(|_, w| w.dir().up() );
+            self.ta.cr1.modify(|_, w| w.dir().up());
 
             // TODO: Setup timer prescaler and top count
             //let pclk = self.ta.pclk();
 
             // Select trigger output in CR2 MSM (MMS) register
-            self.ta.cr2.modify(|_, w| w.mms().update() );
+            self.ta.cr2.modify(|_, w| w.mms().update());
 
             // Use UPDATE event
-            self.ta.egr.write(|w| w.tg().set_bit().ug().set_bit() );
+            self.ta.egr.write(|w| w.tg().set_bit().ug().set_bit());
 
             // Enable MSM bit in SMCR to allow sync via TRGO
-            self.ta.smcr.modify(|_, w| w.msm().sync() );
-
+            self.ta.smcr.modify(|_, w| w.msm().sync());
 
             // Setup timer B as slave
 
             // Set timer in upcounting mode
-            self.tb.cr1.modify(|_, w| w.dir().up() );
+            self.tb.cr1.modify(|_, w| w.dir().up());
 
             // Configure SMCR for external clock mode
-            self.tb.smcr.modify(|_, w| w.sms().ext_clock_mode() );
+            self.tb.smcr.modify(|_, w| w.sms().ext_clock_mode());
 
             // Configure internal trigger channel
-            self.tb.smcr.modify(|_, w| w.ts().itr0() );
+            self.tb.smcr.modify(|_, w| w.ts().itr0());
         }
 
         fn count(&self) -> (u32, u32) {

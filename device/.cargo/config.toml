@@ -12,8 +12,10 @@ rustflags = [
    "-C", "link-arg=-lnosys",
 ]
 
-runner = "probe-run --chip STM32F429ZITx"
+runner = "probe-rs run --chip STM32F429ZITx"
 
 [build]
 target = "thumbv7em-none-eabihf"
 
+[env]
+DEFMT_LOG = "info"

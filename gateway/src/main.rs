@@ -8,13 +8,13 @@ use std::{
     time::Instant,
 };
 
-use log::{debug, error, info, warn};
+use log::{trace, debug, error, info, warn};
 
 use humantime::Duration;
-use structopt::StructOpt;
+use clap::Parser;
 
 use driver_pal::hal::{DeviceConfig, HalInst};
-use embedded_hal::delay::blocking::DelayUs;
+use embedded_hal::delay::DelayNs;
 use linux_embedded_hal::Delay;
 
 use radio_sx128x::prelude::*;
@@ -31,26 +31,26 @@ use dsf_core::{
 
 use dsf_iot::prelude::*;
 
-#[derive(Debug, StructOpt)]
+#[derive(Debug, Parser)]
 struct Options {
-    #[structopt(flatten)]
+    #[clap(flatten)]
     pub spi_config: DeviceConfig,
 
     /// Peer address for bridging
-    #[structopt(long, default_value = "127.0.0.1:10100")]
+    #[clap(long, default_value = "127.0.0.1:10100")]
     pub peer_addr: String,
 
     /// Socket address to bind
-    #[structopt(long, default_value = "127.0.0.1:40715")]
+    #[clap(long, default_value = "127.0.0.1:40715")]
     pub bind_addr: String,
 
-    #[structopt(long, default_value = "10s")]
+    #[clap(long, default_value = "10s")]
     pub discovery_period: Duration,
 
-    #[structopt(long, hidden = true)]
+    #[clap(long, hide = true)]
     pub discovery_enabled: bool,
 
-    #[structopt(long, default_value = "info")]
+    #[clap(long, default_value = "info")]
     /// Configure radio log level
     pub log_level: simplelog::LevelFilter,
 }
@@ -89,7 +89,7 @@ async fn main() -> anyhow::Result<()> {
     .expect("Error setting Ctrl-C handler");
 
     // Load options
-    let opts = Options::from_args();
+    let opts = Options::parse();
 
     // Initialise logging
     let log_cfg = simplelog::ConfigBuilder::new()
@@ -100,7 +100,8 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Starting dsf-gateway");
 
-    debug!("Connecting to HAL");
+    debug!("Connecting to platform SPI");
+    trace!("with config: {:?}", opts.spi_config);
     let HalInst { base: _, spi, pins } = match HalInst::load(&opts.spi_config) {
         Ok(v) => v,
         Err(e) => {
@@ -130,7 +131,6 @@ async fn main() -> anyhow::Result<()> {
     // Initialise radio
     let mut radio = match Sx128x::spi(
         spi,
-        pins.cs,
         pins.busy,
         pins.ready,
         pins.reset,
@@ -487,7 +487,7 @@ async fn main() -> anyhow::Result<()> {
             }
 
             // TODO: decode and handle these
-            Delay {}.delay_ms(10).unwrap();
+            Delay {}.delay_ms(10);
         }
     }
 

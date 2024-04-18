@@ -1,0 +1,30 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Publisher",
+            "cwd": "${workspaceRoot}/device",
+            "executable": "target/thumbv7em-none-eabihf/release/dsf-pub",
+            "request": "launch",
+            "type": "cortex-debug",
+            "servertype": "stutil",
+            "svdFile": "./stm32f429.svd",
+            "serialNumber": "066BFF504955657867073629",
+            "gdbPath" : "gdb-multiarch"
+        },
+        {
+            "name": "Debug Subscriber",
+            "cwd": "${workspaceRoot}/device",
+            "executable": "target/thumbv7em-none-eabihf/release/dsf-sub",
+            "request": "launch",
+            "type": "cortex-debug",
+            "servertype": "stutil",
+            "svdFile": "./stm32f429.svd",
+            "serialNumber": "0671FF323338424E43111241",
+            "gdbPath" : "gdb-multiarch"
+        }
+    ]
+}

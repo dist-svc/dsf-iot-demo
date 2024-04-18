@@ -1,9 +1,7 @@
-
-
-use core::fmt::Write;
 use alloc::boxed::Box;
+use core::fmt::Write;
 
-use log::{Log, Level, Metadata, Record};
+use log::{Level, Log, Metadata, Record};
 
 pub struct SerialLogger {
     pub level: Level,
@@ -14,14 +12,15 @@ pub struct SerialLogger {
 unsafe impl Sync for SerialLogger {}
 unsafe impl Send for SerialLogger {}
 
-
-static mut SERIAL_LOGGER: SerialLogger = SerialLogger{
-    level: Level::Info, writer: None, filters: &[]};
-
+static mut SERIAL_LOGGER: SerialLogger = SerialLogger {
+    level: Level::Info,
+    writer: None,
+    filters: &[],
+};
 
 impl SerialLogger {
     pub fn init(level: Level, w: Box<dyn Write>, f: &'static [&'static str]) {
-        unsafe { 
+        unsafe {
             // Set global SERIAL_LOGGER log context
             SERIAL_LOGGER.level = level;
             SERIAL_LOGGER.writer = Some(w);
@@ -42,19 +41,35 @@ impl Log for SerialLogger {
     fn log(&self, record: &Record) {
         if self.enabled(record.metadata()) {
             let _ = unsafe {
-                if SERIAL_LOGGER.filters.iter().find(|f| Some(**f) == record.module_path() ).is_some() {
+                if SERIAL_LOGGER
+                    .filters
+                    .iter()
+                    .find(|f| Some(**f) == record.module_path())
+                    .is_some()
+                {
                     return;
                 }
 
                 match record.module_path() {
-                    Some(p) => write!(SERIAL_LOGGER, "[{}] {} - {}\r\n", record.level(), p, record.args()),
-                    None => write!(SERIAL_LOGGER, "[{}] - {}\r\n", record.level(), record.args()) 
+                    Some(p) => write!(
+                        SERIAL_LOGGER,
+                        "[{}] {} - {}\r\n",
+                        record.level(),
+                        p,
+                        record.args()
+                    ),
+                    None => write!(
+                        SERIAL_LOGGER,
+                        "[{}] - {}\r\n",
+                        record.level(),
+                        record.args()
+                    ),
                 }
             };
         }
     }
 
-    fn flush(&self) { }
+    fn flush(&self) {}
 }
 
 impl core::fmt::Write for SerialLogger {

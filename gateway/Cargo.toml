@@ -10,10 +10,10 @@ edition = "2018"
 [features]
 gfsk = []
 
-default = [ ]
+default = [ "gfsk" ]
 
 [dependencies]
-structopt = "0.3.15"
+clap = "4.5.4"
 log = "0.4.8"
 ctrlc = "3.1.4"
 simplelog = "0.8.0"
@@ -24,15 +24,16 @@ tokio = { version = "1.26.0", features = [ "full", "net" ] }
 
 embedded-hal = "1.0.0"
 linux-embedded-hal = "0.4.0"
-embedded-hal-compat = "0.12.0"
+embedded-hal-bus = "*"
+#embedded-hal-compat = "0.12.0"
 
 dsf-core = { version = "0.3.0", features = [ "std" ] }
 dsf-client = { version = "0.3.0" }
 dsf-iot = { version = "*", features = [ "std", "alloc" ], default-features = false }
 
-driver-pal = { version = "0.8.0-alpha.3", features = [ "hal", "hal-linux", "hal-cp2130" ], default-features = false }
+driver-pal = { version = "0.8.0", features = [ "hal", "hal-linux", "hal-cp2130" ], default-features = false }
 radio = "0.11.1"
-radio-sx128x = { version = "0.17.2", default-features = false }
+radio-sx128x = { version = "0.18.0", default-features = false }
 lpwan = { version = "*" }
 
 rand-facade = { version = "*", features = [ "os_rng" ], default-features = false }
@@ -52,9 +53,13 @@ dsf-client = { path = "../../dsf/client" }
 dsf-engine = { path = "../../dsf/engine" }
 dsf-iot = { path = "../../dsf-iot" }
 
-radio-sx128x = { git = "https://github.com/ryankurte/rust-radio-sx128x" }
+#radio-sx128x = { git = "https://github.com/ryankurte/rust-radio-sx128x" }
 
 ieee802154 = { git = "https://github.com/ryankurte/rust-ieee802.15.4", branch = "feature/802.15.4-2015-simple" }
 
 stor = { path = "../../rust-stor" }
 lpwan = { path = "../../rust-lpwan" }
+radio = { path = "../../radio/radio" }
+radio-sx128x = { path = "../../radio/radio-sx128x" }
+driver-cp2130 = { path = "../../radio/driver-cp2130" }
+driver-pal = { path = "../../radio/driver-pal" }

@@ -1,18 +1,20 @@
-
 use core::cell::LazyCell;
+use core::fmt::Debug;
 use core::marker::PhantomData;
 use core::str::FromStr;
-use core::fmt::Debug;
 
+use dsf_core::keys::{KeySource, Keys};
 use dsf_core::prelude::*;
-use dsf_core::keys::{Keys, KeySource};
 
 use dsf_engine::store::ObjectFilter;
-use dsf_engine::{comms::Comms, store::{Store, ObjectInfo, Peer, StoreFlags}};
+use dsf_engine::{
+    comms::Comms,
+    store::{ObjectInfo, Peer, Store, StoreFlags},
+};
 
 use heapless::sorted_linked_list::Iter;
 use radio_sx128x::prelude::*;
-use radio_sx128x::{Config as Sx128xConfig};
+use radio_sx128x::Config as Sx128xConfig;
 
 pub fn device_keys() -> [(u64, Keys); 2] {
     [
@@ -30,7 +32,6 @@ pub fn device_keys() -> [(u64, Keys); 2] {
         }),
     ]
 }
-
 
 pub struct StaticKeyStore {
     k: [Option<(Id, Keys)>; 12],
@@ -57,9 +58,7 @@ impl KeySource for StaticKeyStore {
     fn keys(&self, id: &Id) -> Option<Keys> {
         for k in &self.k {
             match &k {
-                Some(v) if &v.0 == id => {
-                    return Some(v.1.clone())
-                },
+                Some(v) if &v.0 == id => return Some(v.1.clone()),
                 _ => (),
             }
         }
@@ -87,13 +86,11 @@ pub fn rf_config() -> Sx128xConfig {
     rf_config
 }
 
-pub struct RadioComms {
-
-}
+pub struct RadioComms {}
 
 impl RadioComms {
     pub fn new() -> Self {
-        Self{}
+        Self {}
     }
 }
 
@@ -123,7 +120,7 @@ pub struct HeaplessStore<Addr: Clone + Debug + 'static> {
     _addr: PhantomData<Addr>,
 }
 
-impl <Addr: Clone + Debug + 'static> HeaplessStore<Addr> {
+impl<Addr: Clone + Debug + 'static> HeaplessStore<Addr> {
     pub fn new() -> Self {
         Self {
             our_keys: None,
@@ -135,7 +132,7 @@ impl <Addr: Clone + Debug + 'static> HeaplessStore<Addr> {
     }
 }
 
-impl <Addr: Clone + Debug + 'static> Store for HeaplessStore<Addr> {
+impl<Addr: Clone + Debug + 'static> Store for HeaplessStore<Addr> {
     const FEATURES: StoreFlags = StoreFlags::empty();
 
     type Address = Addr;
@@ -156,7 +153,7 @@ impl <Addr: Clone + Debug + 'static> Store for HeaplessStore<Addr> {
     fn get_service(&self, id: &Id) -> Result<Option<Service>, Self::Error> {
         Ok(None)
     }
-    
+
     fn update_service<R: Debug, F: Fn(&mut Service) -> R>(
         &mut self,
         id: &Id,
@@ -179,28 +176,38 @@ impl <Addr: Clone + Debug + 'static> Store for HeaplessStore<Addr> {
         todo!()
     }
 
-    fn update_peer<R: core::fmt::Debug, F: Fn(&mut Peer<Self::Address>)-> R>(&mut self, id: &Id, f: F) -> Result<R, Self::Error> {
+    fn update_peer<R: core::fmt::Debug, F: Fn(&mut Peer<Self::Address>) -> R>(
+        &mut self,
+        id: &Id,
+        f: F,
+    ) -> Result<R, Self::Error> {
         todo!()
     }
 
     fn peers<'a>(&'a self) -> Self::Iter<'a> {
-        PeerIter{index: 0, peers: &self.peers}
+        PeerIter {
+            index: 0,
+            peers: &self.peers,
+        }
     }
 
-    fn store_page<T: dsf_core::types::ImmutableData>(&mut self, p: &dsf_core::wire::Container<T>) -> Result<(), Self::Error> {
+    fn store_page<T: dsf_core::types::ImmutableData>(
+        &mut self,
+        p: &dsf_core::wire::Container<T>,
+    ) -> Result<(), Self::Error> {
         todo!()
     }
 
     fn fetch_page<T: MutableData>(
         &mut self,
         f: ObjectFilter,
-        mut buff: T) -> Result<Option<dsf_core::wire::Container<T>>, Self::Error> {
+        mut buff: T,
+    ) -> Result<Option<dsf_core::wire::Container<T>>, Self::Error> {
         todo!()
     }
-    
 }
 
-impl <Addr: Clone + Debug> KeySource for HeaplessStore<Addr> {
+impl<Addr: Clone + Debug> KeySource for HeaplessStore<Addr> {
     fn keys(&self, id: &Id) -> Option<Keys> {
         todo!()
     }
@@ -211,9 +218,9 @@ pub struct PeerIter<'a, Addr: Clone + Debug> {
     index: usize,
 }
 
-impl <'a, Addr: Clone + Debug> Iterator for PeerIter<'a, Addr> {
+impl<'a, Addr: Clone + Debug> Iterator for PeerIter<'a, Addr> {
     type Item = (&'a Id, &'a Peer<Addr>);
-    
+
     fn next(&mut self) -> Option<Self::Item> {
         if self.index >= self.peers.len() {
             return None;

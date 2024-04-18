@@ -11,10 +11,10 @@ watch-check:
 	${ARGS} cargo watch -x check
 
 run-pub:
-	${ARGS} cargo run --bin dsf-pub --release -- --probe 066BFF504955657867073629
+	${ARGS} cargo run --bin dsf-pub --release -- --probe 0483:374b:066BFF504955657867073629
 
 run-sub:
-	${ARGS} cargo run --bin dsf-sub --release -- --probe 0671FF323338424E43111241
+	${ARGS} cargo run --bin dsf-sub --release -- --probe 0483:374b:0671FF323338424E43111241
 
 flash-pub:
 	${ARGS} cargo flash --bin dsf-pub --release --probe 0483:374b:066BFF504955657867073629

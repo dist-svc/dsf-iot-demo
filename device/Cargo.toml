@@ -27,13 +27,13 @@ gfsk = []
 default = [
     "defmt-default",
     "defmt-debug",
-    #"defmt",
+    "defmt",
     "defmt-rtt",
     "gfsk"
 ]
 
 [dependencies]
-cortex-m = "0.7.7"
+cortex-m = { version = "0.7.7", features = ["critical-section-single-core"] }
 cortex-m-rt = "0.7.3"
 alloc-cortex-m = "0.4.0"
 nb = "0.1.2"

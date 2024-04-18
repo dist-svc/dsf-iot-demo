@@ -1,4 +1,3 @@
-
 #[no_mangle]
 pub extern "C" fn _sbrk() {}
 
@@ -12,10 +11,14 @@ pub extern "C" fn _close() {}
 pub extern "C" fn _lseek() {}
 
 #[no_mangle]
-pub extern "C" fn _read() -> i32 { -1 }
+pub extern "C" fn _read() -> i32 {
+    -1
+}
 
 #[no_mangle]
-pub extern "C" fn _fstat() -> i32 { -1 }
+pub extern "C" fn _fstat() -> i32 {
+    -1
+}
 
 #[no_mangle]
 pub extern "C" fn _isatty() {}
@@ -24,7 +27,9 @@ pub extern "C" fn _isatty() {}
 pub extern "C" fn _exit() {}
 
 #[no_mangle]
-pub extern "C" fn _open() -> i32 { -1 }
+pub extern "C" fn _open() -> i32 {
+    -1
+}
 
 #[no_mangle]
 pub extern "C" fn _kill() {}
