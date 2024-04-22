@@ -88,6 +88,12 @@ path = "src/sub.rs"
 test = false
 bench = false
 
+[[bin]]
+name = "dsf-bench"
+path = "src/bench.rs"
+test = false
+bench = false
+
 [profile.dev]
 codegen-units = 1
 debug = 2
